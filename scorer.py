@@ -207,19 +207,23 @@ def get_recommendation(
 ):
     if thresholds is None:
         thresholds = {
-            "strong": 85,
+            "high": 85,
             "good": 70,
-            "moderate": 55
+            "average": 55,
+            "below_average": 40
         }
 
-    if score >= thresholds["strong"]:
-        return "Strong"
+    if score >= thresholds["high"]:
+        return "High"
 
     if score >= thresholds["good"]:
         return "Good"
 
-    if score >= thresholds["moderate"]:
-        return "Moderate"
+    if score >= thresholds["average"]:
+        return "Average"
+
+    if score >= thresholds["below_average"]:
+        return "Below Average"
 
     return "Low"
 
@@ -278,27 +282,6 @@ def generate_explanation(
         positives.append(
             "Good coverage of preferred skills."
         )
-
-    missing_skills = (
-        match_result
-        .get("required_skills", {})
-        .get("missing", [])
-    )
-
-    if missing_skills:
-        for item in missing_skills:
-            if isinstance(item, dict):
-                skill = item.get(
-                    "skill",
-                    ""
-                )
-            else:
-                skill = item
-
-            if skill:
-                gaps.append(
-                    f"Missing required skill: {skill}."
-                )
 
     return {
         "positive_factors": positives,

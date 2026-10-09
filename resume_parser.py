@@ -221,7 +221,42 @@ def extract_name(text):
 
     return None
 
-def extract_skills(sections):
+def extract_skills_from_full_text(text):
+    """Fallback for when heading-based section detection finds no
+    dedicated 'Skills' section (common with multi-column/graphical resume
+    templates where the PDF text extraction loses the heading structure).
+
+    Scans every line of the resume for ones that look like a delimited
+    skill list (several short, comma/pipe/bullet separated tokens) and
+    treats those tokens as skills, regardless of which section they fall
+    under.
+    """
+    skills = []
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line or line.endswith("."):
+            continue
+
+        parts = [
+            part.strip()
+            for part in re.split(r"[,|•;/]", line)
+            if part.strip()
+        ]
+
+        if len(parts) < 3:
+            continue
+
+        if all(
+            len(part) <= 30 and len(part.split()) <= 4
+            for part in parts
+        ):
+            skills.extend(parts)
+
+    return skills
+
+def extract_skills(sections, full_text=""):
     skills = []
 
     for heading, content in sections.items():
@@ -235,17 +270,25 @@ def extract_skills(sections):
             and score >= 0.50
         ):
             parts = re.split(
-                r"[,|•;]",
+                r"[,|•;]|\s-\s",
                 content
             )
 
             for skill in parts:
                 skill = skill.strip()
+                skill = skill.lstrip("-•*▪◦").strip()
 
                 if skill:
                     skills.append(skill)
 
-    return normalize_skills(skills)
+    normalized = normalize_skills(skills)
+
+    if not normalized and full_text:
+        normalized = normalize_skills(
+            extract_skills_from_full_text(full_text)
+        )
+
+    return normalized
 
 def extract_education(sections):
     education = []
@@ -316,6 +359,10 @@ def parse_resume(file_path):
         extract_experience_sections(sections)
     )
 
+    
+    if not experience_text.strip():
+        experience_text = text
+
     resume_data = {
         "candidate_id": os.path.splitext(
             os.path.basename(file_path)
@@ -325,7 +372,7 @@ def parse_resume(file_path):
         "name": extract_name(text),
         "email": extract_email(text),
         "phone": extract_phone(text),
-        "skills": extract_skills(sections),
+        "skills": extract_skills(sections, text),
         "education": extract_education(sections),
         "experience": extract_experience(
             experience_text

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { UploadCloud, X, File as FileIcon, CheckCircle2, Trash2 } from "lucide-react";
+import { UploadCloud, X, File as FileIcon, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -18,10 +18,35 @@ interface FileUploadCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>,
   onFilesChange: (files: File[]) => void;
   onFileRemove: (id: string) => void;
   onClose?: () => void;
+  /** Allow selecting more than one file at a time. Defaults to true. */
+  multiple?: boolean;
+  /** Restrict the file picker/drop to specific file types, e.g. ".pdf". */
+  accept?: string;
+  /** Override the heading text. */
+  title?: string;
+  /** Override the subheading text. */
+  description?: string;
+  /** Override the helper text shown inside the dropzone. */
+  hint?: string;
 }
 
 export const FileUploadCard = React.forwardRef<HTMLDivElement, FileUploadCardProps>(
-  ({ className, files = [], onFilesChange, onFileRemove, onClose, ...props }, ref) => {
+  (
+    {
+      className,
+      files = [],
+      onFilesChange,
+      onFileRemove,
+      onClose,
+      multiple = true,
+      accept,
+      title = "Upload files",
+      description = "Select and upload the files of your choice",
+      hint = "JPEG, PNG, PDF, and MP4 formats, up to 50 MB.",
+      ...props
+    },
+    ref
+  ) => {
     const [isDragging, setIsDragging] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -46,17 +71,21 @@ export const FileUploadCard = React.forwardRef<HTMLDivElement, FileUploadCardPro
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      const droppedFiles = Array.from(e.dataTransfer.files);
+      let droppedFiles = Array.from(e.dataTransfer.files);
+      if (!multiple) droppedFiles = droppedFiles.slice(0, 1);
       if (droppedFiles && droppedFiles.length > 0) {
         onFilesChange(droppedFiles);
       }
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selectedFiles = Array.from(e.target.files || []);
+      let selectedFiles = Array.from(e.target.files || []);
+      if (!multiple) selectedFiles = selectedFiles.slice(0, 1);
       if (selectedFiles.length > 0) {
         onFilesChange(selectedFiles);
       }
+      // Allow re-selecting the same file after removal.
+      e.target.value = "";
     };
 
     const triggerFileSelect = () => fileInputRef.current?.click();
@@ -99,9 +128,9 @@ export const FileUploadCard = React.forwardRef<HTMLDivElement, FileUploadCardPro
                 <UploadCloud className="w-6 h-6 text-muted-foreground" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-foreground">Upload files</h3>
+                <h3 className="text-lg font-semibold text-foreground">{title}</h3>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Select and upload the files of your choice
+                  {description}
                 </p>
               </div>
             </div>
@@ -128,15 +157,18 @@ export const FileUploadCard = React.forwardRef<HTMLDivElement, FileUploadCardPro
             <input
               ref={fileInputRef}
               type="file"
-              multiple
+              multiple={multiple}
+              accept={accept}
               className="hidden"
               onChange={handleFileSelect}
             />
             <UploadCloud className="w-10 h-10 text-muted-foreground mb-4" />
-            <p className="font-semibold text-foreground">Choose a file or drag & drop it here.</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              JPEG, PNG, PDF, and MP4 formats, up to 50 MB.
+            <p className="font-semibold text-foreground">
+              {multiple
+                ? "Choose file(s) or drag & drop them here."
+                : "Choose a file or drag & drop it here."}
             </p>
+            <p className="text-xs text-muted-foreground mt-1">{hint}</p>
             <Button variant="outline" size="sm" className="mt-4 pointer-events-none">
               Browse File
             </Button>
@@ -185,7 +217,15 @@ export const FileUploadCard = React.forwardRef<HTMLDivElement, FileUploadCardPro
                      <div className="flex items-center gap-2">
                         {file.status === 'completed' && <CheckCircle2 className="w-5 h-5 text-green-500" />}
                         <Button variant="ghost" size="icon" className="rounded-full w-8 h-8" onClick={() => onFileRemove(file.id)}>
-                           {file.status === 'completed' ? <Trash2 className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                           {file.status === 'completed' ? (
+                             <img
+                               src="https://cdn-icons-png.flaticon.com/512/8569/8569152.png"
+                               alt="Delete"
+                               className="w-4 h-4"
+                             />
+                           ) : (
+                             <X className="w-4 h-4" />
+                           )}
                         </Button>
                      </div>
                   </motion.li>

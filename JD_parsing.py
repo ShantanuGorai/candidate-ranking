@@ -237,6 +237,74 @@ def merge_multiline_headings(lines, body_font_size):
 
     return merged
 
+def clean_skill_fragment(part):
+    """Strip a leading bullet marker (hyphen/dot/etc.) and surrounding
+    whitespace left over after splitting a bullet-point requirements
+    paragraph back into individual skill phrases.
+    """
+    part = part.strip()
+    part = part.lstrip("-•*▪◦").strip()
+    part = part.rstrip(".").strip()
+    return part
+
+def normalize_jd(jd_data):
+    """Turn the raw heading-keyed JD dict into the fixed schema
+    matcher.py actually reads: required_skills / preferred_skills (skill
+    name lists) and description (a full text blob for semantic
+    comparison). Without this step, match_candidate's jd.get(
+    "required_skills", []) / jd.get("description", "") calls never find
+    anything, since parse_jd's raw output is keyed by whatever heading
+    text literally appears in the PDF (e.g. "Requirements", "Skills
+    Required"), not by these fixed keys.
+    """
+    required_skills = []
+    preferred_skills = []
+    description_parts = []
+    job_title = None
+    company = None
+
+    for heading, content in jd_data.items():
+        if not content:
+            continue
+
+        description_parts.append(content)
+
+        section_type, similarity = classify_heading(heading)
+
+        if similarity < 0.50:
+            continue
+
+        if section_type == "job title" and job_title is None:
+            job_title = content.strip()
+        elif section_type == "company information" and company is None:
+            company = content.strip()
+
+        parts = [
+            clean_skill_fragment(part)
+            for part in re.split(r"[,|•;]|\s-\s|\n-\s", content)
+            if clean_skill_fragment(part)
+        ]
+
+        if section_type == "required skills":
+            required_skills.extend(parts)
+        elif section_type == "preferred skills":
+            preferred_skills.extend(parts)
+        elif section_type in ("requirements", "qualifications"):
+            # Many JDs list required skills under a generic
+            # "Requirements"/"Qualifications" heading instead of a
+            # dedicated "Required Skills" one.
+            required_skills.extend(parts)
+        elif section_type == "preferred qualifications":
+            preferred_skills.extend(parts)
+
+    jd_data["required_skills"] = required_skills
+    jd_data["preferred_skills"] = preferred_skills
+    jd_data["description"] = clean_text(" ".join(description_parts))
+    jd_data["job_title"] = job_title
+    jd_data["company"] = company
+
+    return jd_data
+
 def parse_jd(file_path):
     lines = extract_pdf_layout(file_path)
 
@@ -282,7 +350,7 @@ def parse_jd(file_path):
             " ".join(current_content)
         )
 
-    return jd_data
+    return normalize_jd(jd_data)
 
 if __name__ == "__main__":
     file_path = select_jd()
