@@ -1,238 +1,164 @@
-# 🚀 AI-Powered Candidate Ranking & Recruitment Intelligence System
+# Candidate Ranking
+
+An AI-powered recruiting tool that ranks candidates against a job description, explains every score in plain language, and gives recruiters the tools to act on it: a chatbot, draft emails, hiring-stage tracking, and more.
+
+Upload a job description and a batch of resumes. Get back a ranked, explainable shortlist in seconds, no manual resume screening required.
+
+---
+
+## Key Features
+
+### Smart Matching and Scoring
+Parses both the JD and every resume (including messy, multi-column, or prose-style PDFs), then scores each candidate on required skills, preferred skills, experience, education, and overall JD alignment using semantic similarity, not just keyword matching.
+
+### Explainable Results
+Every score comes with a reason:
+- Positive factors
+- Missing skills, shown as exact chips, not vague text
+- An experience gap breakdown
+- Direct quotes pulled from the resume as evidence for each JD requirement
+
+### Talent Map
+A 2D visualization (via PCA) plotting every candidate's resume against the JD, clustering similar profiles so you can spot your strongest group at a glance.
+
+### Skill Trends and Radar Chart
+See which JD skills are well covered across your whole candidate pool and which are scarce, visualized as a radar chart, plus a one-click exportable report.
+
+### Live "What-If" Scoring
+Drag sliders to reweight how much required skills, experience, or education matter, and watch the ranking update in real time, no re-upload needed.
+
+### Recruiting Assistant Chatbot
+A floating chatbot that answers questions in plain language:
+- "Should I shortlist Priya or Raj?"
+- "He has more experience but fewer skills, should I hire him?"
+- Or just type a skill name like "scikit-learn" to see how relevant it is to this specific JD
+
+### One-Click Candidate Emails
+Draft and send real interview-invite or rejection emails (with date and mode fields for interviews), personalized from each candidate's actual matched and missing skills, and automatically tracked as a hiring stage.
+
+### Hiring Pipeline Tracking
+Move candidates through New, Shortlisted, Interview Invited, Rejected, and Hired, auto-updated when an email is sent, with recruiter notes and CSV export.
+
+### Duplicate Detection and Blind Screening
+Flags likely duplicate submissions (by email, phone, or name) and offers a blind mode that hides names and contact details to reduce bias during screening.
+
+---
+
+## Tech Stack
+
+### Backend
+- **Language:** Python
+- **Web framework:** Flask
+- **Cross-origin requests:** Flask-CORS
+- **PDF parsing:** PyMuPDF (fitz)
+- **Email sending:** smtplib + email.mime.text (Gmail SMTP)
+- **Numerical computing:** NumPy
 
-An AI-powered recruitment platform that automates bulk resume parsing, analyzes job descriptions, ranks candidates based on job-specific requirements, and provides explainable insights to support smarter, more transparent hiring decisions.
+### AI / ML
+- **Embedding model:** Sentence-Transformers (all-MiniLM-L6-v2)
+  Used for semantic skill matching, resume section classification, evidence retrieval, and skill-relevance chatbot queries
+- **Similarity search:** scikit-learn (cosine_similarity)
+  Used for matching JD requirements to resume content
+- **Dimensionality reduction:** scikit-learn (PCA)
+  Used for the 2D talent map visualization
+- **Clustering:** scikit-learn (KMeans)
+  Used for grouping similar candidate profiles on the talent map
+- **Pattern extraction:** Python `re` (regex)
+  Used for experience date ranges, bullet-point skill splitting, and email/phone extraction
 
-## 📌 Overview
+### Frontend
+- **Framework:** React (with TypeScript)
+- **Build tool:** Vite
+- **Styling:** Tailwind CSS
+- **UI components:** shadcn/ui
+- **Animation:** Framer Motion
+- **Icons:** Lucide React
+- **Font:** Inter (Google Fonts)
 
-Recruiters often receive hundreds or thousands of applications for a single job opening. Manually reviewing every resume is time-consuming, while automated screening systems can sometimes overlook qualified candidates or provide limited explanations for their decisions.
+### Architecture Notes
+- No database. The app is stateless; each ranking run parses the uploaded JD and resumes fresh and returns everything in one response.
+- No external AI API. All matching, scoring, evidence retrieval, the chatbot, and skill-relevance lookups run on a self-hosted MiniLM model via sentence-transformers, not a third-party LLM service.
+- REST API between a Vite dev server (frontend, port 5173) and Flask (backend, port 5000), communicating over fetch/JSON.
 
-The **AI-Powered Candidate Ranking & Recruitment Intelligence System** addresses these challenges by enabling recruiters to upload a Job Description (JD) and multiple resumes simultaneously. The system extracts job requirements, analyzes candidate qualifications, calculates compatibility scores, and ranks candidates according to their suitability for the role.
+---
 
-Beyond candidate ranking, the platform offers explainable scoring, skill-gap analysis, blind screening, duplicate resume detection, recruitment analytics, automated email communication, and an AI Recruiting Assistant.
+## Project Structure
 
-The goal is to make recruitment more efficient, consistent, explainable, and data-driven while keeping recruiters in control of final hiring decisions.
+```
+candidate-ranking/
+├── app.py                   # Flask API (ranking, email sending, skill relevance)
+├── JD_parsing.py             # Job description PDF parsing and normalization
+├── resume_parser.py          # Resume PDF parsing and section extraction
+├── matcher.py                 # Semantic skill and experience matching
+├── scorer.py                  # Weighted scoring and recommendation labels
+├── candidate_ranking.py       # Final ranking logic
+├── insights.py                 # Evidence retrieval, talent map, parse confidence
+├── experience_extractor.py     # Work experience date parsing
+├── skill_normalizer.py         # Skill name normalization and deduplication
+├── requirements.txt
+└── Upload-JD/                  # React + TypeScript frontend
+    └── src/
+        ├── App.tsx
+        ├── components/ui/      # shadcn/ui components
+        └── lib/
+            ├── recruiterBot.ts   # Chatbot logic
+            ├── emailDrafts.ts    # Email template generation
+            └── skillTrends.ts    # Skill coverage and radar chart
+```
 
-## ✨ Key Features
+---
 
-### 📄 1. Intelligent Job Description & Resume Parsing
+## Getting Started
 
-- Upload a Job Description and multiple candidate resumes in a single workflow.
-- Extract required skills, experience, educational qualifications, certifications, and other relevant criteria from the JD.
-- Parse resumes to identify candidate skills, work experience, education, and qualifications.
-- Compare candidate profiles against job-specific requirements.
-- Identify potential qualification gaps and missing requirements.
+### Backend
 
-### 🏆 2. Automated Candidate Scoring & Ranking
+```bash
+pip install -r requirements.txt
+python app.py
+```
 
-- Calculate a compatibility score for every candidate.
-- Rank candidates according to their match with the target job description.
-- Display higher-scoring candidates at the top of the ranked list.
-- Sort candidates alphabetically by name when needed.
-- Support configurable scoring weights for different evaluation criteria.
+The first run downloads the MiniLM model, so an internet connection is required once.
 
-### 📊 3. Explainable Candidate Evaluation
+To enable real email sending (interview invites and rejections), set a Gmail App Password before starting the server:
 
-Every candidate receives a detailed evaluation to help recruiters understand the reasoning behind their score.
+```bash
+export SENDER_APP_PASSWORD="your-16-char-app-password"
+python app.py
+```
 
-- **Overall Match Score:** Indicates the candidate's estimated compatibility with the role.
-- **Positive Factors:** Highlights relevant skills, qualifications, and experience.
-- **Negative Factors:** Identifies potential mismatches or gaps.
-- **Missing Required Skills:** Lists required skills that were not identified in the resume.
-- **Score Breakdown:** Shows the contribution of individual evaluation factors to the overall score.
+### Frontend
 
-This feature helps recruiters move beyond a single numerical score and review the factors influencing candidate rankings.
+```bash
+cd Upload-JD
+npm install
+npm run dev
+```
 
-### ⭐ 4. Talent Map Visualization
+The app runs at `http://localhost:5173` by default and expects the backend at `http://localhost:5000`.
 
-The Talent Map provides a visual representation of candidate-job compatibility.
+---
 
-- Visualize candidates based on their match with the job description.
-- Identify stronger and weaker matches at a glance.
-- Use proximity to the star as an indication of a closer match to the job requirements.
+## API Endpoints
 
-### ⚖️ 5. Blind Screening Mode
+### `GET /api/health`
+Health check.
 
-Blind Screening helps recruiters focus on candidate qualifications during the initial evaluation stage.
+### `POST /api/rank`
+Upload a JD and resumes, get back ranked candidates.
 
-- Replace candidate names with anonymized labels such as Candidate 1, Candidate 2, and Candidate 3.
-- Reduce exposure to identifiable information during initial screening.
-- Support a more structured and qualification-focused review process.
+### `POST /api/send-email`
+Send an interview-invite or rejection email.
 
-Blind screening is intended to help reduce certain sources of bias; it does not guarantee bias-free recruitment.
+### `POST /api/skill-relevance`
+Check how relevant a given skill is to the loaded JD.
 
-### 🎛️ 6. What-If Scoring Weights
+---
 
-Different roles require different evaluation priorities. The What-If Scoring Weights feature allows recruiters to experiment with these priorities.
+## Notes and Limitations
 
-- Adjust the importance of individual scoring factors.
-- Automatically recalculate candidate scores when weights change.
-- Observe how changing evaluation priorities affects candidate rankings.
-- Customize the evaluation approach for different job requirements.
-
-### 📧 7. Automated Candidate Email Communication
-
-Streamline candidate communication with interview invitations and professional rejection emails.
-
-**Interview Invitations**
-- Select shortlisted candidates.
-- Specify the interview date and mode.
-- Generate interview emails using contact information extracted from resumes.
-- Review and edit email content before sending.
-
-**Rejection Emails**
-- Generate professional rejection messages for rejected candidates.
-- Simplify communication throughout the recruitment process.
-
-This feature reduces repetitive administrative work and helps recruiters communicate more efficiently with applicants.
-
-### 📈 8. Skill Trend Analysis & Recruitment Analytics
-
-Understand the distribution of job-related skills across the applicant pool.
-
-- Analyze how frequently each JD skill appears in the uploaded resumes.
-- Identify commonly available skills and less frequently represented requirements.
-- Visualize skill distributions using a spider/radar chart.
-- Generate downloadable reports for further analysis.
-
-This helps recruiters understand the skill composition of the applicant pool and identify potential talent shortages.
-
-### ♻️ 9. Duplicate Resume Detection
-
-- Flag potential duplicate resumes within an uploaded batch.
-- Help recruiters identify repeated candidate submissions.
-- Reduce redundant resume reviews.
-- Improve the organization of candidate records.
-
-Duplicate detection should be treated as a flag for review rather than definitive proof that two submissions belong to the same person.
-
-### 🤖 10. AI Recruiting Assistant
-
-The AI Recruiting Assistant helps recruiters explore candidate suitability and skill relevance through conversational queries.
-
-**Candidate Suitability Analysis**
-- Enter a candidate's name to request an evaluation for the target role.
-- Identify relevant qualifications, skills, and experience.
-- Highlight positive factors supporting the candidate's suitability.
-- Explain potential mismatches and missing requirements.
-
-**Skill Relevance Analysis**
-- Query skills such as `Python`, `scikit-learn`, or `Computer Vision`.
-- Understand how a skill relates to the target job.
-- Check whether the skill is explicitly mentioned in the JD.
-- Get contextual insights to support recruiter decisions.
-
-The assistant is designed to support recruiter analysis, not replace independent candidate review.
-
-### 📥 11. Flexible Candidate Export
-
-Export candidate information according to recruitment needs.
-
-- Export all candidates.
-- Export shortlisted candidates.
-- Export rejected candidates.
-
-This supports reporting, record-keeping, and downstream recruitment workflows.
-
-## 🔄 How It Works
-
-1. **Upload Job Description:** The recruiter provides the job description containing the role's requirements.
-2. **Upload Resumes:** Multiple candidate resumes are uploaded in a single batch.
-3. **Extract Information:** The system parses the JD and resumes into structured information.
-4. **Match Candidates:** Candidate qualifications are compared with the job requirements.
-5. **Calculate Scores:** The scoring engine evaluates candidates using the configured criteria.
-6. **Rank Candidates:** Candidates are organized according to their compatibility scores.
-7. **Review Insights:** Recruiters explore score breakdowns, positive and negative factors, missing skills, and visualizations.
-8. **Use Screening Tools:** Recruiters can enable blind screening, review potential duplicates, and adjust scoring weights.
-9. **Communicate Decisions:** Interview invitations and rejection emails can be prepared, reviewed, and sent.
-10. **Export Results:** Candidate lists and skill analysis reports can be downloaded as needed.
-
-## 🎯 Problem Statement
-
-Traditional recruitment workflows face several challenges:
-
-- Large volumes of applications make manual resume screening inefficient.
-- Candidate qualifications can be difficult to compare consistently.
-- Automated screening may provide scores without sufficient explanations.
-- Recruiters may struggle to identify missing skills and qualification gaps.
-- Manual interview coordination and rejection communication require additional effort.
-- Identifiable information may influence initial screening decisions.
-- Duplicate applications can create redundant work.
-- Recruiters need better visibility into the skills available across an applicant pool.
-
-This project addresses these challenges through a unified recruitment intelligence platform combining AI-assisted candidate evaluation, explainable scoring, visualization, and workflow automation.
-
-## 💡 Project Objectives
-
-- Automate bulk resume parsing and JD analysis.
-- Evaluate candidate suitability against job-specific requirements.
-- Generate interpretable candidate scores and rankings.
-- Identify strengths, potential weaknesses, and missing required skills.
-- Allow recruiters to experiment with scoring priorities.
-- Support blind screening and potential duplicate detection.
-- Visualize skill trends across candidate batches.
-- Simplify interview and rejection communication.
-- Enable flexible candidate and report exports.
-- Keep human judgment central to final hiring decisions.
-
-## 🛠️ Technology Stack
-
-Update this section with the exact technologies used in your implementation.
-
-- **Programming Language:** Add the language used for parsing and scoring.
-- **AI/ML & NLP:** Resume parsing, skill extraction, candidate matching, and scoring.
-- **Frontend:** Add your frontend framework and UI libraries.
-- **Backend:** Add your backend framework and API technologies.
-- **Database:** Add your database technology.
-- **Visualization:** Add the charting libraries used for the Talent Map and radar chart.
-- **Email Integration:** Add the email delivery service or SMTP provider.
-- **Reporting:** Add the libraries used to generate downloadable reports.
-
-## 📊 Example Candidate Evaluation
-
-The following is an illustrative example of the information presented by the system.
-
-| Evaluation Factor | Example Result |
-|---|---|
-| Overall Match Score | 87/100 |
-| Relevant Skills | Python, Machine Learning, SQL |
-| Positive Factors | Relevant projects and matching technical skills |
-| Potential Gaps | Limited evidence of production deployment |
-| Missing Required Skills | A required skill not identified in the resume |
-| Recommendation | Review for potential shortlisting |
-
-*Illustrative data only. Actual scores, factors, and recommendations depend on the job description, candidate resume, and scoring configuration.*
-
-## ⚖️ Responsible & Explainable Recruitment
-
-Recruitment decisions can significantly affect people's careers. This system is designed to assist human decision-making rather than make unquestionable hiring decisions.
-
-Important considerations include:
-
-- Use job-relevant and consistently applied evaluation criteria.
-- Validate resume parsing across different document formats.
-- Review candidate score explanations before making decisions.
-- Treat missing information as potentially unreported information, not automatic proof of lacking a skill.
-- Test scoring behavior across different candidate groups and resume formats.
-- Protect candidate information and restrict unauthorized access.
-- Review generated emails before sending when appropriate.
-- Keep recruiters responsible for final shortlisting and hiring decisions.
-
-A compatibility score is a decision-support signal, not a definitive measure of a candidate's potential or professional ability.
-
-## 🔮 Future Enhancements
-
-Potential future improvements include:
-
-- Semantic resume-to-JD matching using transformer-based language models.
-- Improved extraction of employment duration and overlapping experience.
-- More robust skill normalization and synonym detection.
-- Enhanced duplicate detection across differently formatted resumes.
-- Resume parsing and scoring accuracy evaluation.
-- Recruitment dashboards with historical analytics.
-- Audit logs for scoring changes and recruiter actions.
-- Expanded fairness testing and bias evaluation.
-- Integration with Applicant Tracking Systems (ATS).
-- Optimized processing for very large resume batches.
+- Email sending requires a Gmail App Password (2-Step Verification must be enabled on the sending account).
+- The skill-relevance chatbot checks relevance against the job description only; it does not re-scan every resume for an arbitrary skill typed on the spot.
+- Resume and JD parsing quality depends on PDF layout; a "parsing confidence" indicator flags candidates whose resumes may have been harder to extract.
 
 ## 👨‍💻 Author
 
