@@ -25,12 +25,43 @@ import "./App.css";
 interface ChatMessage {
   role: "user" | "bot";
   text: string;
+  /** A user bubble stays invisible while its "flight" from the input box
+   * plays; it is revealed once the flying copy lands on top of it. */
+  pending?: boolean;
+}
+
+/** State for the ghost bubble that flies from the typing box to the chat. */
+interface FlyingMessage {
+  index: number;
+  text: string;
+  width: number;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
 }
 
 const CHAT_GREETING =
-  'Hi! I\'m your recruiting assistant. Ask me things like "Should I shortlist Priya or Raj?", ' +
-  '"He has more experience but fewer skills, should I hire him?", "Who should I shortlist?", ' +
-  'or just type a skill like "scikit-learn" to see how relevant it is to this JD.';
+  "Hi! I'm your recruiting assistant. Tap the guide below for examples, or just start typing.";
+
+const CHAT_GUIDE_TIPS: { title: string; example: string }[] = [
+  {
+    title: "Compare two candidates",
+    example: '"Should I shortlist Priya or Raj?"',
+  },
+  {
+    title: "Weigh a trade-off",
+    example: '"He has more experience but fewer skills, should I hire him?"',
+  },
+  {
+    title: "Check a skill against the JD",
+    example: 'Just type a skill, like "scikit-learn"',
+  },
+  {
+    title: "Get a shortlist",
+    example: '"Who should I shortlist?"',
+  },
+];
 
 interface SkillRelevanceJdInfo {
   required_skills?: string[];
@@ -43,12 +74,137 @@ interface RecruiterChatProps {
   jd?: SkillRelevanceJdInfo;
 }
 
+function ChatGuide({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: "auto" }}
+      exit={{ opacity: 0, height: 0 }}
+      transition={{ duration: 0.25, ease: "easeInOut" }}
+      // shrink-0 stops the flex column from squashing the guide when the
+      // message list grows; the inner card scrolls instead.
+      className="overflow-hidden shrink-0"
+    >
+      <div className="mx-3 mt-3 mb-1 max-h-[28vh] overflow-y-auto overscroll-contain rounded-2xl border border-white/50 bg-white/40 backdrop-blur-md p-3 shadow-sm text-left">
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-[11px] font-semibold text-foreground text-left">
+            How to use this assistant
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close guide"
+            className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+          >
+            Got it
+          </button>
+        </div>
+        <ol className="space-y-2.5 text-left">
+          {CHAT_GUIDE_TIPS.map((tip, i) => (
+            <li key={tip.title} className="grid grid-cols-[1.25rem_1fr] items-start">
+              <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
+                {i + 1}.
+              </span>
+              <div className="min-w-0 text-left">
+                <p className="text-[11px] font-medium text-foreground leading-snug text-left">
+                  {tip.title}
+                </p>
+                <p className="text-[10px] text-muted-foreground italic leading-snug mt-0.5 text-left">
+                  {tip.example}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </motion.div>
+  );
+}
+
+/** A thin diagonal highlight across the top of a bubble, like light catching
+ * the surface of glass. Purely decorative, sits above the bubble's own
+ * background and below its text. */
+function GlassSheen() {
+  return (
+    <div
+      className="absolute inset-0 rounded-2xl pointer-events-none"
+      style={{
+        background:
+          "linear-gradient(135deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 35%, rgba(255,255,255,0) 60%)",
+      }}
+    />
+  );
+}
+
+function ChatBubble({ message, index }: { message: ChatMessage; index: number }) {
+  const isUser = message.role === "user";
+  return (
+    <motion.div
+      // Outgoing (user) bubbles don't animate themselves: a ghost copy flies
+      // from the typing box to this spot, and this bubble is revealed (via
+      // `pending`) when the ghost lands. Incoming (bot) replies arrive from
+      // the left.
+      initial={isUser ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 10, x: -28 }}
+      animate={
+        isUser
+          ? { opacity: message.pending ? 0 : 1 }
+          : { opacity: 1, scale: 1, y: 0, x: 0 }
+      }
+      transition={
+        isUser
+          ? { duration: 0 }
+          : { type: "spring", stiffness: 420, damping: 32, delay: index === 0 ? 0 : 0.02 }
+      }
+      className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+    >
+      <div
+        data-pending-bubble={message.pending ? "" : undefined}
+        className={`relative overflow-hidden max-w-[85%] rounded-2xl px-3 py-2 text-xs text-left leading-relaxed whitespace-pre-line shadow-sm backdrop-blur-lg backdrop-saturate-150 border ${
+          isUser
+            ? "bg-gradient-to-br from-indigo-500/85 via-violet-500/85 to-fuchsia-500/85 border-white/30 text-white"
+            : "bg-white/40 border-white/60 text-foreground"
+        }`}
+      >
+        <GlassSheen />
+        <span className="relative">{message.text}</span>
+      </div>
+    </motion.div>
+  );
+}
+
+function ThinkingBubble() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.85, y: 10, x: -28 }}
+      animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
+      exit={{ opacity: 0, scale: 0.85 }}
+      className="flex justify-start"
+    >
+      <div className="relative overflow-hidden bg-white/40 backdrop-blur-lg backdrop-saturate-150 border border-white/60 rounded-2xl px-3 py-2.5 flex items-center gap-1 shadow-sm">
+        <GlassSheen />
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="relative h-1.5 w-1.5 rounded-full bg-muted-foreground/70"
+            animate={{ y: [0, -4, 0] }}
+            transition={{ duration: 0.9, repeat: Infinity, delay: i * 0.15, ease: "easeInOut" }}
+          />
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
   const [open, setOpen] = React.useState(false);
   const [messages, setMessages] = React.useState<ChatMessage[]>([]);
   const [input, setInput] = React.useState("");
   const [thinking, setThinking] = React.useState(false);
+  const [showGuide, setShowGuide] = React.useState(true);
+  const [flying, setFlying] = React.useState<FlyingMessage | null>(null);
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (open && messages.length === 0) {
@@ -57,17 +213,63 @@ function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
   }, [open, messages.length]);
 
   React.useEffect(() => {
+    // A pending user bubble is positioned instantly by the flight effect
+    // below, so skip the smooth scroll for it.
+    if (messages[messages.length - 1]?.pending) return;
     const el = scrollRef.current;
     if (el && typeof el.scrollTo === "function") {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }
   }, [messages, thinking]);
 
+  // When a new (invisible) user bubble lands in the list, measure where it
+  // sits and where the input box is, then launch the flying ghost between them.
+  React.useLayoutEffect(() => {
+    const index = messages.length - 1;
+    const last = messages[index];
+    if (!last?.pending || flying) return;
+
+    const panel = panelRef.current;
+    const scroller = scrollRef.current;
+    const inputEl = inputRef.current;
+    const bubble = scroller?.querySelector<HTMLElement>("[data-pending-bubble]");
+
+    if (!panel || !scroller || !inputEl || !bubble) {
+      // Can't animate; just reveal the message.
+      setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, pending: false } : m)));
+      return;
+    }
+
+    // Jump to the bottom so the bubble is at its final resting position.
+    scroller.scrollTop = scroller.scrollHeight;
+
+    const p = panel.getBoundingClientRect();
+    const i = inputEl.getBoundingClientRect();
+    const b = bubble.getBoundingClientRect();
+
+    setFlying({
+      index,
+      text: last.text,
+      width: b.width,
+      fromX: i.left - p.left + 12,
+      fromY: i.top - p.top + (i.height - b.height) / 2,
+      toX: b.left - p.left,
+      toY: b.top - p.top,
+    });
+  }, [messages, flying]);
+
+  const finishFlight = () => {
+    if (!flying) return;
+    const idx = flying.index;
+    setMessages((prev) => prev.map((m, i) => (i === idx ? { ...m, pending: false } : m)));
+    setFlying(null);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text) return;
 
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    setMessages((prev) => [...prev, { role: "user", text, pending: true }]);
     setInput("");
     setThinking(true);
 
@@ -118,55 +320,79 @@ function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.95 }}
-            transition={{ duration: 0.2, ease: "easeOut" }}
-            className="fixed bottom-24 left-6 z-50 w-80 max-w-[calc(100vw-3rem)] max-h-[70vh] flex flex-col bg-background border rounded-xl shadow-xl overflow-hidden"
+            ref={panelRef}
+            initial={{ opacity: 0, scale: 0.3, y: 48, borderRadius: 32 }}
+            animate={{ opacity: 1, scale: 1, y: 0, borderRadius: 28 }}
+            exit={{ opacity: 0, scale: 0.3, y: 48, borderRadius: 32 }}
+            transition={{ type: "spring", stiffness: 300, damping: 26 }}
+            style={{ transformOrigin: "bottom left" }}
+            className="fixed bottom-24 left-6 z-50 w-[23rem] max-w-[calc(100vw-3rem)] max-h-[80vh] flex flex-col overflow-hidden border border-white/40 shadow-2xl"
           >
-            <div className="flex items-center justify-between px-3 py-2.5 border-b bg-muted/40">
+            {/* Liquid-glass backdrop: colorful gradient showing through a frosted blur */}
+            <div
+              className="absolute inset-0 -z-10"
+              style={{
+                background:
+                  "linear-gradient(145deg, rgba(99,102,241,0.35), rgba(217,70,239,0.25), rgba(255,255,255,0.55))",
+              }}
+            />
+            <div className="absolute inset-0 -z-10 backdrop-blur-2xl backdrop-saturate-150 bg-white/30" />
+
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-white/40 bg-white/20 backdrop-blur-md shrink-0">
               <div>
                 <p className="text-sm font-semibold text-foreground">Recruiting Assistant</p>
                 <p className="text-[10px] text-muted-foreground">Ask about any candidate</p>
               </div>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close chat"
-                className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-2.5">
-              {messages.map((m, i) => (
-                <div
-                  key={i}
-                  className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setShowGuide((v) => !v)}
+                  aria-label="Toggle user guide"
+                  title="Settings"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-muted-foreground hover:bg-white/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                 >
-                  <div
-                    className={`max-w-[85%] rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-line ${
-                      m.role === "user"
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-foreground"
-                    }`}
-                  >
-                    {m.text}
-                  </div>
-                </div>
-              ))}
-              {thinking && (
-                <div className="flex justify-start">
-                  <div className="bg-muted text-muted-foreground rounded-lg px-3 py-2 text-xs">
-                    thinking…
-                  </div>
-                </div>
-              )}
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close chat"
+                  className="h-7 w-7 flex items-center justify-center rounded-full text-muted-foreground hover:bg-white/40 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2 border-t p-2">
+            <AnimatePresence initial={false}>
+              {showGuide && <ChatGuide onClose={() => setShowGuide(false)} />}
+            </AnimatePresence>
+
+            <div
+              ref={scrollRef}
+              className="chat-scroll flex-1 min-h-[8rem] overflow-y-auto px-3 pt-3 pb-5 space-y-2.5"
+              style={{
+                maskImage:
+                  "linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)",
+                WebkitMaskImage:
+                  "linear-gradient(to bottom, transparent, black 16px, black calc(100% - 16px), transparent)",
+              }}
+            >
+              {messages.map((m, i) => (
+                <ChatBubble key={i} message={m} index={i} />
+              ))}
+              <AnimatePresence>{thinking && <ThinkingBubble key="thinking" />}</AnimatePresence>
+            </div>
+
+            <div className="flex items-center gap-2 border-t border-white/40 bg-white/20 backdrop-blur-md p-2 shrink-0">
               <input
+                ref={inputRef}
                 type="text"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -174,12 +400,40 @@ function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
                   if (e.key === "Enter") send();
                 }}
                 placeholder="e.g. Should I shortlist Priya?"
-                className="flex-1 h-9 px-3 text-xs rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="flex-1 h-9 px-3 text-xs rounded-full border border-white/60 bg-white/50 backdrop-blur-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
-              <Button size="sm" onClick={send} disabled={!input.trim()}>
-                Send
-              </Button>
+              <motion.button
+                type="button"
+                onClick={send}
+                disabled={!input.trim()}
+                whileTap={{ scale: 0.9 }}
+                className="shrink-0 h-9 w-9 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white flex items-center justify-center shadow-sm disabled:opacity-40 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                aria-label="Send message"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13"></line>
+                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+              </motion.button>
             </div>
+
+            {/* Flying ghost: the outgoing message glides from the typing box
+                to its spot in the chat, then the real bubble is revealed. */}
+            {flying && (
+              <motion.div
+                className="absolute left-0 top-0 z-20 pointer-events-none"
+                style={{ width: flying.width }}
+                initial={{ x: flying.fromX, y: flying.fromY, scale: 0.85, opacity: 0.9 }}
+                animate={{ x: flying.toX, y: flying.toY, scale: 1, opacity: 1 }}
+                transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                onAnimationComplete={finishFlight}
+              >
+                <div className="relative overflow-hidden rounded-2xl px-3 py-2 text-xs text-left leading-relaxed whitespace-pre-line shadow-sm backdrop-blur-lg border bg-gradient-to-br from-indigo-500/85 via-violet-500/85 to-fuchsia-500/85 border-white/30 text-white">
+                  <GlassSheen />
+                  <span className="relative">{flying.text}</span>
+                </div>
+              </motion.div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -188,8 +442,8 @@ function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close recruiting assistant" : "Open recruiting assistant"}
-        className="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full bg-foreground text-background shadow-lg flex items-center justify-center text-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        animate={open ? { y: 0 } : { y: [0, -8, 0] }}
+        className="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg shadow-indigo-500/30 flex items-center justify-center text-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+        animate={open ? { y: 0, rotate: 0 } : { y: [0, -8, 0] }}
         transition={
           open
             ? { duration: 0.2 }
@@ -198,7 +452,16 @@ function RecruiterChat({ candidates, jd }: RecruiterChatProps) {
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.95 }}
       >
-        {open ? "✕" : "💬"}
+        {open ? (
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        ) : (
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+          </svg>
+        )}
       </motion.button>
     </>
   );
@@ -1020,7 +1283,7 @@ function App() {
       <div className="w-full max-w-2xl text-center">
         {step === "result" && (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 mb-3 rounded-full border bg-background text-xs font-medium text-muted-foreground">
-             Results
+            Results
           </span>
         )}
         <h1 className="text-2xl font-bold text-foreground">Candidate Ranking</h1>
@@ -1433,7 +1696,9 @@ function App() {
                         shortlisted.has(id) ? "text-yellow-500" : "text-muted-foreground"
                       }`}
                     >
-                      {shortlisted.has(id) ? "★" : "☆"}
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill={shortlisted.has(id) ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
                     </button>
                     </div>
 
